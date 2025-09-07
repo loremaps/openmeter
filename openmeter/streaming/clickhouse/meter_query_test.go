@@ -303,10 +303,10 @@ func TestQueryMeter(t *testing.T) {
 				},
 				GroupBy: []string{"customer_id"},
 			},
-			wantSQL:  "WITH map('customer1', 'customer1', 'subject1', 'customer1', 'customer2', 'customer2', 'subject2', 'customer2') as subject_to_customer_id SELECT tumbleStart(min(om_events.time), toIntervalMinute(1)) AS windowstart, tumbleEnd(max(om_events.time), toIntervalMinute(1)) AS windowend, sum(ifNotFinite(toFloat64OrNull(JSON_VALUE(om_events.data, '$.value')), null)) AS value, subject_to_customer_id[om_events.subject] AS customer_id FROM openmeter.om_events WHERE om_events.namespace = ? AND om_events.type = ? AND om_events.subject IN (?) GROUP BY customer_id",
-			wantArgs: []interface{}{"my_namespace", "event1", []string{"customer1", "subject1", "customer2", "subject2"}},
+			wantSQL:  "WITH map('subject1', 'customer1', 'subject2', 'customer2') as subject_to_customer_id SELECT tumbleStart(min(om_events.time), toIntervalMinute(1)) AS windowstart, tumbleEnd(max(om_events.time), toIntervalMinute(1)) AS windowend, sum(ifNotFinite(toFloat64OrNull(JSON_VALUE(om_events.data, '$.value')), null)) AS value, subject_to_customer_id[om_events.subject] AS customer_id FROM openmeter.om_events WHERE om_events.namespace = ? AND om_events.type = ? AND om_events.subject IN (?) GROUP BY customer_id",
+			wantArgs: []interface{}{"my_namespace", "event1", []string{"subject1", "subject2"}},
 		},
-		{ // Filter by customer ID without group by
+		{ // Filter by customer without group by
 			testName: "filter by customer ID without group by",
 			query: queryMeter{
 				Database:        "openmeter",
@@ -326,6 +326,7 @@ func TestQueryMeter(t *testing.T) {
 							},
 							ID: "customer1",
 						},
+						Key: lo.ToPtr("customer-key-1"),
 						UsageAttribution: customer.CustomerUsageAttribution{
 							SubjectKeys: []string{"subject1"},
 						},
@@ -343,8 +344,15 @@ func TestQueryMeter(t *testing.T) {
 					},
 				},
 			},
-			wantSQL:  "SELECT tumbleStart(min(om_events.time), toIntervalMinute(1)) AS windowstart, tumbleEnd(max(om_events.time), toIntervalMinute(1)) AS windowend, sum(ifNotFinite(toFloat64OrNull(JSON_VALUE(om_events.data, '$.value')), null)) AS value FROM openmeter.om_events WHERE om_events.namespace = ? AND om_events.type = ? AND om_events.subject IN (?)",
-			wantArgs: []interface{}{"my_namespace", "event1", []string{"customer1", "subject1", "customer2", "subject2"}},
+			wantSQL: "SELECT tumbleStart(min(om_events.time), toIntervalMinute(1)) AS windowstart, tumbleEnd(max(om_events.time), toIntervalMinute(1)) AS windowend, sum(ifNotFinite(toFloat64OrNull(JSON_VALUE(om_events.data, '$.value')), null)) AS value FROM openmeter.om_events WHERE om_events.namespace = ? AND om_events.type = ? AND om_events.subject IN (?)",
+			wantArgs: []interface{}{"my_namespace", "event1", []string{
+				// Only the first customer has a key
+				"customer-key-1",
+				// Usage attribution subjects of the first customer
+				"subject1",
+				// Usage attribution subjects of the second customer
+				"subject2",
+			}},
 		},
 		{ // Filter by both customer and subject
 			testName: "filter by both customer and subject",
@@ -374,8 +382,8 @@ func TestQueryMeter(t *testing.T) {
 				FilterSubject: []string{"subject1"},
 				GroupBy:       []string{"customer_id"},
 			},
-			wantSQL:  "WITH map('customer1', 'customer1', 'subject1', 'customer1', 'subject2', 'customer1') as subject_to_customer_id SELECT tumbleStart(min(om_events.time), toIntervalMinute(1)) AS windowstart, tumbleEnd(max(om_events.time), toIntervalMinute(1)) AS windowend, sum(ifNotFinite(toFloat64OrNull(JSON_VALUE(om_events.data, '$.value')), null)) AS value, subject_to_customer_id[om_events.subject] AS customer_id FROM openmeter.om_events WHERE om_events.namespace = ? AND om_events.type = ? AND om_events.subject IN (?) AND om_events.subject IN (?) GROUP BY customer_id",
-			wantArgs: []interface{}{"my_namespace", "event1", []string{"customer1", "subject1", "subject2"}, []string{"subject1"}},
+			wantSQL:  "WITH map('subject1', 'customer1', 'subject2', 'customer1') as subject_to_customer_id SELECT tumbleStart(min(om_events.time), toIntervalMinute(1)) AS windowstart, tumbleEnd(max(om_events.time), toIntervalMinute(1)) AS windowend, sum(ifNotFinite(toFloat64OrNull(JSON_VALUE(om_events.data, '$.value')), null)) AS value, subject_to_customer_id[om_events.subject] AS customer_id FROM openmeter.om_events WHERE om_events.namespace = ? AND om_events.type = ? AND om_events.subject IN (?) AND om_events.subject IN (?) GROUP BY customer_id",
+			wantArgs: []interface{}{"my_namespace", "event1", []string{"subject1", "subject2"}, []string{"subject1"}},
 		},
 		{ // Aggregate data with filtering for a single group and single value
 			query: queryMeter{
