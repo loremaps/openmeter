@@ -76,7 +76,7 @@ func (a *adapter) expandInvoiceLineItems(query *db.BillingInvoiceQuery, expand b
 			billinginvoiceline.StatusIn(requestedStatuses...),
 		)
 
-		a.expandLineItems(q)
+		a.expandLineItemsWithDetailedLines(q)
 	})
 }
 
@@ -748,7 +748,7 @@ func (a *adapter) mapInvoiceFromDB(ctx context.Context, invoice *db.BillingInvoi
 	}
 
 	if expand.Lines {
-		mappedLines, err := a.mapInvoiceLineFromDB(ctx, mapInvoiceLineFromDBInput{
+		mappedLines, err := a.mapInvoiceLineFromDB(mapInvoiceLineFromDBInput{
 			lines:          invoice.Edges.BillingInvoiceLines,
 			includeDeleted: expand.DeletedLines,
 		})

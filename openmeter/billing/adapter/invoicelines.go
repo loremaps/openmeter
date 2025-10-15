@@ -449,32 +449,15 @@ func (a *adapter) ListInvoiceLines(ctx context.Context, input billing.ListInvoic
 				q = q.Where(billinginvoiceline.InvoiceIDIn(input.InvoiceIDs...))
 			}
 
-			if input.InvoiceAtBefore != nil {
-				q = q.Where(billinginvoiceline.InvoiceAtLT(*input.InvoiceAtBefore))
-			}
-
 			if !input.IncludeDeleted {
 				q = q.Where(billinginvoiceline.DeletedAtIsNil())
-			}
-
-			if len(input.ParentLineIDs) > 0 {
-				if input.ParentLineIDsIncludeParent {
-					q = q.Where(
-						billinginvoiceline.Or(
-							billinginvoiceline.ParentLineIDIn(input.ParentLineIDs...),
-							billinginvoiceline.IDIn(input.ParentLineIDs...),
-						),
-					)
-				} else {
-					q = q.Where(billinginvoiceline.ParentLineIDIn(input.ParentLineIDs...))
-				}
 			}
 
 			if len(input.Statuses) > 0 {
 				q = q.Where(billinginvoiceline.StatusIn(input.Statuses...))
 			}
 
-			tx.expandLineItems(q)
+			tx.expandLineItemsWithDetailedLines(q)
 		})
 
 		dbInvoices, err := query.All(ctx)
@@ -486,7 +469,7 @@ func (a *adapter) ListInvoiceLines(ctx context.Context, input billing.ListInvoic
 			return dbInvoice.Edges.BillingInvoiceLines
 		})
 
-		mappedLines, err := tx.mapInvoiceLineFromDB(ctx, mapInvoiceLineFromDBInput{
+		mappedLines, err := tx.mapInvoiceLineFromDB(mapInvoiceLineFromDBInput{
 			lines:          lines,
 			includeDeleted: input.IncludeDeleted,
 		})
@@ -504,9 +487,7 @@ func (a *adapter) ListInvoiceLines(ctx context.Context, input billing.ListInvoic
 	})
 }
 
-// expandLineItems is a helper function to expand the line items in the query, given that the mapper
-// will handle the parent/child fetching it's fine to only fetch items that we need to reconstruct
-// this specific entity.
+// expandLineItems is a helper function to expand the line items in the query, detailed lines are not included
 func (a *adapter) expandLineItems(q *db.BillingInvoiceLineQuery) *db.BillingInvoiceLineQuery {
 	return q.WithFlatFeeLine().
 		WithUsageBasedLine().
@@ -520,6 +501,17 @@ func (a *adapter) expandLineItems(q *db.BillingInvoiceLineQuery) *db.BillingInvo
 				q.Where(billinginvoicelinediscount.DeletedAtIsNil())
 			},
 		)
+}
+
+// expandLineItemsWithDetailedLines expands the invoice lines and their detailed lines if any exists
+func (a *adapter) expandLineItemsWithDetailedLines(q *db.BillingInvoiceLineQuery) *db.BillingInvoiceLineQuery {
+	q = a.expandLineItems(q)
+
+	q.WithDetailedLines(func(bilq *db.BillingInvoiceLineQuery) {
+		a.expandLineItems(bilq)
+	})
+
+	return q
 }
 
 func (a *adapter) AssociateLinesToInvoice(ctx context.Context, input billing.AssociateLinesToInvoiceAdapterInput) ([]*billing.Line, error) {
@@ -555,7 +547,7 @@ func (a *adapter) fetchLines(ctx context.Context, ns string, lineIDs []string) (
 		Where(billinginvoiceline.Namespace(ns)).
 		Where(billinginvoiceline.IDIn(lineIDs...))
 
-	query = a.expandLineItems(query)
+	query = a.expandLineItemsWithDetailedLines(query)
 
 	dbLines, err := query.All(ctx)
 	if err != nil {
@@ -582,7 +574,7 @@ func (a *adapter) fetchLines(ctx context.Context, ns string, lineIDs []string) (
 		return nil, err
 	}
 
-	lines, err := a.mapInvoiceLineFromDB(ctx, mapInvoiceLineFromDBInput{
+	lines, err := a.mapInvoiceLineFromDB(mapInvoiceLineFromDBInput{
 		lines: dbLinesInSameOrder,
 	})
 	if err != nil {
@@ -618,7 +610,7 @@ func (a *adapter) GetLinesForSubscription(ctx context.Context, in billing.GetLin
 			return nil, fmt.Errorf("fetching lines: %w", err)
 		}
 
-		lines, err := tx.mapInvoiceLineFromDB(ctx, mapInvoiceLineFromDBInput{
+		lines, err := tx.mapInvoiceLineFromDB(mapInvoiceLineFromDBInput{
 			lines:          dbLines,
 			includeDeleted: true,
 		})
@@ -650,7 +642,7 @@ func (a *adapter) GetLinesForSubscription(ctx context.Context, in billing.GetLin
 				}
 
 				return billing.LineWithInvoiceHeader{
-					Line:    &line,
+					Line:    line,
 					Invoice: tx.mapInvoiceBaseFromDB(ctx, dbLine.Edges.BillingInvoice),
 				}, nil
 			})

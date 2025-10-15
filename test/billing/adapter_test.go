@@ -374,18 +374,21 @@ func (s *BillingAdapterTestSuite) TestDetailedLineHandling() {
 		// When we query the line's children, we get the 4 lines, one is deleted
 		lines, err = s.BillingAdapter.ListInvoiceLines(ctx, billing.ListInvoiceLinesAdapterInput{
 			Namespace:      ns,
-			ParentLineIDs:  []string{lines[0].ID},
+			LineIDs:        []string{lines[0].ID},
 			IncludeDeleted: true,
 		})
 
-		// Then we get the 4 lines
 		require.NoError(s.T(), err)
-		require.Len(s.T(), lines, 4)
+		require.Len(s.T(), lines, 1)
+		childLines := lines[0].Children
+
+		// Then we get the 4 lines
+		require.Len(s.T(), childLines, 4)
 		require.ElementsMatch(s.T(),
 			[]string{"ref1", "ref2", "ref3", "ref4"},
-			getUniqReferenceNames(lines))
+			getUniqReferenceNames(childLines))
 
-		deleted, found := lo.Find(lines, func(l *billing.Line) bool {
+		deleted, found := lo.Find(childLines, func(l *billing.Line) bool {
 			return l.DeletedAt != nil
 		})
 		require.True(s.T(), found)

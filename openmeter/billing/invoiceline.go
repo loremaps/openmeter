@@ -914,14 +914,11 @@ func (c UpsertInvoiceLinesAdapterInput) Validate() error {
 type ListInvoiceLinesAdapterInput struct {
 	Namespace string
 
-	CustomerID                 string
-	InvoiceIDs                 []string
-	InvoiceStatuses            []InvoiceStatus
-	InvoiceAtBefore            *time.Time
-	IncludeDeleted             bool
-	ParentLineIDs              []string
-	ParentLineIDsIncludeParent bool
-	Statuses                   []InvoiceLineStatus
+	CustomerID      string
+	InvoiceIDs      []string
+	InvoiceStatuses []InvoiceStatus
+	IncludeDeleted  bool
+	Statuses        []InvoiceLineStatus
 
 	LineIDs []string
 }

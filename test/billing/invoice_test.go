@@ -1761,11 +1761,10 @@ func (s *InvoicingTestSuite) TestUBPProgressiveInvoicing() {
 			})
 			require.NoError(s.T(), err)
 
-			require.Len(s.T(), updatedInvoice.Lines.MustGet(), 2)
+			require.Len(s.T(), updatedInvoice.Lines.MustGet(), 1)
 
 			deletedLine := updatedInvoice.Lines.GetByID(flatPerUnit.ID)
-			require.NotNil(s.T(), deletedLine)
-			require.NotNil(s.T(), deletedLine.DeletedAt)
+			require.Nil(s.T(), deletedLine)
 
 			requireTotals(s.T(), expectedTotals{
 				Amount: 0,
